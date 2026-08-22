@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Omnix AI</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@500&display=swap" rel="stylesheet">
+    <style>
+        :root { --cyan: #00f2ff; --pink: #ff007a; --bg: #0a0b1e; }
+        body { background: var(--bg); color: #e0e0ff; font-family: 'Rajdhani', sans-serif; height: 100vh; display: flex; flex-direction: column; margin: 0; overflow: hidden; }
+        
+        /* UI Header */
+        header { padding: 15px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        h1 { font-family: 'Orbitron'; font-size: 1.2rem; color: var(--cyan); margin: 0; text-shadow: 0 0 10px var(--cyan); }
+
+        /* Status Banner (Critical for Debugging) */
+        #status-bar { font-size: 0.8rem; background: rgba(0,0,0,0.5); padding: 5px; text-align: center; color: #aaa; }
+
+        /* Chat Area */
+        #chat { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+        .msg { max-width: 80%; padding: 10px 15px; border-radius: 12px; font-size: 0.95rem; }
+        .user { align-self: flex-end; background: var(--pink); color: white; }
+        .ai { align-self: flex-start; background: rgba(255,255,255,0.05); border: 1px solid var(--cyan); }
+
+        /* Mic Button & Controls */
+        .controls { padding: 20px; display: flex; flex-direction: column; align-items: center; background: linear-gradient(transparent, var(--bg)); }
+        
+        .mic-box { position: relative; margin-bottom: 20px; }
+        #mic-btn { width: 70px; height: 70px; border-radius: 50%; border: 2px solid var(--cyan); background: none; font-size: 30px; color: var(--cyan); cursor: pointer; transition: 0.3s; z-index: 10; position: relative; }
+        
+        /* Listening Animation */
+        .listening #mic-btn { border-color: var(--pink); color: var(--pink); box-shadow: 0 0 20px var(--pink); }
+        .ripple { position: absolute; top: 0; left: 0; width: 70px; height: 70px; border: 2px solid var(--cyan); border-radius: 50%; opacity: 0; pointer-events: none; }
+        .listening .ripple { animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { transform: scale(1); opacity: 0.8; } 100% { transform: scale(2); opacity: 0; } }
+
+        /* Text Input Fallback */
+        .text-box { width: 100%; max-width: 400px; display: flex; background: rgba(255,255,255,0.05); border-radius: 20px; padding: 5px 15px; border: 1px solid rgba(0,242,255,0.2); }
+        input { flex: 1; background: none; border: none; color: white; padding: 10px; outline: none; }
+        #send-btn { background: none; border: none; color: var(--cyan); font-weight: bold; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <header><h1>OMNIX</h1></header>
+    <div id="status-bar">Checking system status...</div>
+
+    <main id="chat">
+        <div class="msg ai">Omnix online. Tap the mic to begin.</div>
+    </main>
+
+    <div class="controls">
+        <div class="mic-box" id="mic-container">
+            <button id="mic-btn">🎙️</button>
+            <div class="ripple"></div>
+        </div>
+
+        <div class="text-box">
+            <input type="text" id="text-input" placeholder="Type command...">
+            <button id="send-btn">SEND</button>
+        </div>
+    </div>
+
+<script>
+const chat = document.getElementById('chat');
+const micBtn = document.getElementById('mic-btn');
+const status = document.getElementById('status-bar');
+const textInput = document.getElementById('text-input');
+const micContainer = document.getElementById('mic-container');
+
+const SpeechRecognition =
+    window.SpeechRecognition || window.webkitSpeechRecognition;
+
+let recognition = null;
+let isListening = false;
+
+// Check browser support
+if (!SpeechRecognition) {
+    status.innerText =
+        "❌ Voice recognition is not supported in this browser.";
+} else {
+
+    recognition = new SpeechRecognition();
+
+    recognition.lang = "en-US";
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => {
+        isListening = true;
+        micContainer.classList.add("listening");
+        status.innerText = "🎧 Listening... Speak now";
+    };
+
+    recognition.onresult = (event) => {
+
+        const text =
+            event.results[0][0].transcript.trim();
+
+        console.log("Recognized:", text);
+
+        if (text.length > 0) {
+            status.innerText = "✅ Heard: " + text;
+            handleInput(text);
+        } else {
+            status.innerText = "⚠️ I didn't hear anything.";
+        }
+    };
+
+    recognition.onerror = (event) => {
+
+        console.error("Speech recognition error:", event.error);
+
+        isListening = false;
+        micContainer.classList.remove("listening");
+
+        if (event.error === "not-allowed") {
+            status.innerText = "❌ Microphone permission denied.";
+        }
+        else if (event.error === "no-speech") {
+            status.innerText = "⚠️ No speech detected. Try again.";
+        }
+        else if (event.error === "network") {
+            status.innerText = "❌ Speech service/network error.";
+        }
+        else {
+            status.innerText =
+                "❌ Voice error: " + event.error;
+        }
+    };
+
+    recognition.onend = () => {
+
+        isListening = false;
+        micContainer.classList.remove("listening");
+
+        if (
+            status.innerText === "🎧 Listening... Speak now"
+        ) {
+            status.innerText = "Ready.";
+        }
+    };
+}
+
+
+// MIC BUTTON
+micBtn.addEventListener("click", async () => {
+
+    if (!recognition) {
+        alert(
+            "Your browser does not support speech recognition. Try Chrome."
+        );
+        return;
+    }
+
+    if (isListening) {
+        recognition.stop();
+        return;
+    }
+
+    try {
+
+        // Request microphone permission
+        const stream =
+            await navigator.mediaDevices.getUserMedia({
+                audio: true
+            });
+
+        // Stop the permission-test stream.
+        // SpeechRecognition will open the microphone itself.
+        stream.getTracks().forEach(track => track.stop());
+
+        status.innerText = "Starting voice recognition...";
+
+        // Small delay helps on some Android browsers
+        setTimeout(() => {
+            try {
+                recognition.start();
+            } catch (error) {
+                console.error(error);
+                status.innerText =
+                    "⚠️ Couldn't start voice recognition.";
+            }
+        }, 150);
+
+    } catch (error) {
+
+        console.error("Microphone error:", error);
+
+        status.innerText =
+            "❌ Microphone permission problem.";
+
+        alert(
+            "Microphone permission is required. Check your browser permissions."
+        );
+    }
+});
+
+
+// HANDLE USER INPUT
+function handleInput(text) {
+
+    if (!text || !text.trim()) {
+        return;
+    }
+
+    text = text.trim();
+
+    addMsg(text, "user");
+
+    const aiMsg = addMsg("🤔 Thinking...", "ai");
+
+    setTimeout(() => {
+
+        const reply = getResponse(text);
+
+        aiMsg.innerText = reply;
+
+        speak(reply);
+
+    }, 500);
+}
+
+
+// OMNIX RESPONSE
+function getResponse(input) {
+
+    const command = input.toLowerCase();
+
+    if (command.includes("hello") ||
+        command.includes("hi")) {
+
+        return "Hello! Omnix is online and listening.";
+    }
+
+    if (command.includes("time")) {
+
+        return "The current time is " +
+            new Date().toLocaleTimeString();
+    }
+
+    if (command.includes("who are you")) {
+
+        return "I am Omnix, your AI assistant.";
+    }
+
+    if (command.includes("how are you")) {
+
+        return "I'm doing great. What can I help you with?";
+    }
+
+    return "You said: " + input;
+}
+
+
+// ADD MESSAGE
+function addMsg(text, sender) {
+
+    const div = document.createElement("div");
+
+    div.className = "msg " + sender;
+
+    div.innerText = text;
+
+    chat.appendChild(div);
+
+    chat.scrollTop = chat.scrollHeight;
+
+    return div;
+}
+
+
+// TEXT TO SPEECH
+function speak(text) {
+
+    if (!("speechSynthesis" in window)) {
+        return;
+    }
+
+    window.speechSynthesis.cancel();
+
+    const utterance =
+        new SpeechSynthesisUtterance(text);
+
+    utterance.lang = "en-US";
+    utterance.pitch = 1.1;
+    utterance.rate = 1.0;
+    utterance.volume = 1.0;
+
+    window.speechSynthesis.speak(utterance);
+}
+
+
+// TEXT SEND BUTTON
+document.getElementById("send-btn")
+    .addEventListener("click", () => {
+
+        const text = textInput.value.trim();
+
+        if (!text) return;
+
+        handleInput(text);
+
+        textInput.value = "";
+    });
+
+
+// ENTER KEY
+textInput.addEventListener("keydown", (event) => {
+
+    if (event.key === "Enter") {
+
+        const text = textInput.value.trim();
+
+        if (!text) return;
+
+        handleInput(text);
+
+        textInput.value = "";
+    }
+});
+
+
+// INITIAL STATUS
+if (SpeechRecognition) {
+    status.innerText =
+        "✅ Omnix ready. Tap 🎙️ and speak.";
+}
+  </script>
+</body>
+</html>
