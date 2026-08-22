@@ -97,8 +97,8 @@ export default {
       }
     }
 
-    return new Response("Omnix is online 🤖", {
-      status: 200
+    return env.ASSETS.fetch(request);
+});
     });
   }
 };
