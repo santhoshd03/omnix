@@ -1,9 +1,11 @@
-// Omnix deployment test
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    if (url.pathname === "/api/chat" && request.method === "POST") {
+    if (
+      url.pathname === "/api/chat" &&
+      request.method === "POST"
+    ) {
       try {
         const body = await request.json();
         const message = body.message;
@@ -17,9 +19,17 @@ export default {
 
         const apiKey = env.GEMINI_API_KEY;
 
+        console.log(
+          "Gemini key exists:",
+          Boolean(apiKey)
+        );
+
         if (!apiKey) {
           return Response.json(
-            { error: "Gemini API key is not configured." },
+            {
+              error:
+                "Gemini API key is not configured."
+            },
             { status: 500 }
           );
         }
@@ -29,39 +39,50 @@ export default {
         const geminiUrl =
           `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
-        const response = await fetch(geminiUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            systemInstruction: {
-              parts: [
-                {
-                  text:
-                    "You are Omnix, a helpful AI assistant. " +
-                    "Answer clearly, naturally and helpfully."
-                }
-              ]
+        const response = await fetch(
+          geminiUrl,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json"
             },
-            contents: [
-              {
-                role: "user",
+
+            body: JSON.stringify({
+              systemInstruction: {
                 parts: [
                   {
-                    text: message
+                    text:
+                      "You are Omnix, a helpful AI assistant. " +
+                      "Answer clearly and naturally."
                   }
                 ]
-              }
-            ]
-          })
-        });
+              },
 
-        const data = await response.json();
+              contents: [
+                {
+                  role: "user",
+                  parts: [
+                    {
+                      text: message
+                    }
+                  ]
+                }
+              ]
+            })
+          }
+        );
+
+        const data =
+          await response.json();
+
+        console.log(
+          "Gemini status:",
+          response.status
+        );
 
         if (!response.ok) {
-          console.error("Gemini error:", data);
-
           return Response.json(
             {
               error:
@@ -73,24 +94,36 @@ export default {
         }
 
         const reply =
-          data?.candidates?.[0]?.content?.parts?.[0]?.text;
+          data?.candidates?.[0]
+            ?.content?.parts?.[0]?.text;
 
         if (!reply) {
           return Response.json(
-            { error: "Gemini returned no answer." },
+            {
+              error:
+                "Gemini returned no answer."
+            },
             { status: 500 }
           );
         }
 
         return Response.json({
-          reply: reply
+          reply
         });
 
       } catch (error) {
-        console.error("Worker error:", error);
+
+        console.error(
+          "Worker error:",
+          error
+        );
 
         return Response.json(
-          { error: "Internal server error." },
+          {
+            error:
+              error?.message ||
+              "Internal server error."
+          },
           { status: 500 }
         );
       }
