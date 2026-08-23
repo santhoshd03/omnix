@@ -1,4 +1,5 @@
-    export default {
+// Omnix deployment test
+export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
